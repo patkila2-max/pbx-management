@@ -1,0 +1,50 @@
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: pbx_management
+      POSTGRES_USER: pbx_app
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the deployment environment}
+    volumes:
+      - pbx_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pbx_app -d pbx_management"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - pbx_internal
+
+  api:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    environment:
+      PGHOST: db
+      PGDATABASE: pbx_management
+      PGUSER: pbx_app
+      PGPASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the deployment environment}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - pbx_internal
+
+  web:
+    build:
+      context: ./frontend
+    restart: unless-stopped
+    ports:
+      - "10.8.0.1:8088:80"
+    depends_on:
+      - api
+    networks:
+      - pbx_internal
+
+volumes:
+  pbx_db_data:
+
+networks:
+  pbx_internal:
+    driver: bridge
