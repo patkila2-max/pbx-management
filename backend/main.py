@@ -1,12 +1,14 @@
 import os
 
 import psycopg
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+
+from asterisk_gateway import gateway_request, GatewayError
 
 app = FastAPI(
     title="PBX Management API",
-    version="0.1.0",
+    version="0.2.0",
     docs_url=None,
     redoc_url=None,
 )
@@ -25,7 +27,7 @@ def health():
     return {
         "application": "PBX Management API",
         "status": "ok",
-        "version": "0.1.0",
+        "version": "0.2.0",
     }
 
 
@@ -47,9 +49,47 @@ def status():
     except Exception:
         database_status = "unavailable"
 
+    asterisk_status = "available"
+
+    try:
+        gateway_request("status")
+    except GatewayError:
+        asterisk_status = "unavailable"
+
     return {
         "application": "PBX Management",
         "api": "online",
         "database": database_status,
-        "asterisk": "not_connected",
+        "asterisk": asterisk_status,
     }
+
+
+def get_asterisk_data(operation: str):
+    try:
+        result = gateway_request(operation)
+        return result["data"]
+    except GatewayError:
+        raise HTTPException(
+            status_code=503,
+            detail="Asterisk monitoring service unavailable",
+        )
+
+
+@app.get("/api/asterisk/status")
+def asterisk_status():
+    return get_asterisk_data("status")
+
+
+@app.get("/api/asterisk/settings")
+def asterisk_settings():
+    return get_asterisk_data("settings")
+
+
+@app.get("/api/asterisk/channels")
+def asterisk_channels():
+    return get_asterisk_data("channels")
+
+
+@app.get("/api/asterisk/endpoints")
+def asterisk_endpoints():
+    return get_asterisk_data("endpoints")

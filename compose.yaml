@@ -20,17 +20,20 @@ services:
     build:
       context: ./backend
     restart: unless-stopped
+    group_add:
+      - "20002"
     environment:
       PGHOST: db
       PGDATABASE: pbx_management
       PGUSER: pbx_app
       PGPASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the deployment environment}
+    volumes:
+      - /var/lib/pbx-gateway/run:/run/pbx-gateway:ro
     depends_on:
       db:
         condition: service_healthy
     networks:
       - pbx_internal
-
   web:
     build:
       context: ./frontend
