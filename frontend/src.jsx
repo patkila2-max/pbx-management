@@ -1,72 +1,292 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./style.css";
 
-function App() {
-  const [status, setStatus] = useState(null);
-  const [error, setError] = useState("");
+const REFRESH_INTERVAL = 10000;
 
-  async function refreshStatus() {
-    try {
-      const response = await fetch("/api/status", { cache: "no-store" });
-      if (!response.ok) throw new Error("API returned an error");
-      setStatus(await response.json());
-      setError("");
-    } catch {
-      setError("Unable to reach the application API.");
-    }
+async function fetchJSON(url) {
+  const response = await fetch(url, { cache: "no-store" });
+  if (!response.ok) {
+    throw new Error(`${url}: HTTP ${response.status}`);
   }
+  return response.json();
+}
 
-  useEffect(() => {
-    refreshStatus();
+function Metric({ label, value, detail, state }) {
+  return (
+    <article className="card">
+      <div className="metric-heading">
+        <span className="muted">{label}</span>
+        {state && <span className={`indicator ${state}`} />}
+      </div>
+      <div className="value">{value}</div>
+      {detail && <div className="metric-detail">{detail}</div>}
+    </article>
+  );
+}
+
+function App() {
+  const [data, setData] = useState({
+    system: null,
+    asterisk: null,
+    settings: null,
+    channels: null,
+    endpoints: null,
+  });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [lastUpdated, setLastUpdated] = useState(null);
+
+  const refreshDashboard = useCallback(async () => {
+    setLoading(true);
+
+    const requests = [
+      ["system", "/api/status"],
+      ["asterisk", "/api/asterisk/status"],
+      ["settings", "/api/asterisk/settings"],
+      ["channels", "/api/asterisk/channels"],
+      ["endpoints", "/api/asterisk/endpoints"],
+    ];
+
+    const results = await Promise.allSettled(
+      requests.map(([, url]) => fetchJSON(url))
+    );
+
+    const updated = {};
+    const failures = [];
+
+    results.forEach((result, index) => {
+      const key = requests[index][0];
+
+      if (result.status === "fulfilled") {
+        updated[key] = result.value;
+      } else {
+        failures.push(key);
+      }
+    });
+
+    setData((previous) => ({ ...previous, ...updated }));
+    setLastUpdated(new Date());
+
+    if (failures.length) {
+      setError(`Some monitoring data could not be loaded: ${failures.join(", ")}`);
+    } else {
+      setError("");
+    }
+
+    setLoading(false);
   }, []);
 
-  const items = [
-    ["Web application", status ? "Online" : error ? "Unavailable" : "Checking"],
-    ["API backend", status?.api === "online" ? "Online" : "Checking"],
-    ["PostgreSQL", status?.database ?? "Checking"],
-    ["Asterisk PBX", "Not connected yet"],
-  ];
+  useEffect(() => {
+    refreshDashboard();
+    const timer = window.setInterval(refreshDashboard, REFRESH_INTERVAL);
+    return () => window.clearInterval(timer);
+  }, [refreshDashboard]);
+
+  const systemOnline = data.system?.api === "online";
+  const databaseOnline = data.system?.database === "connected";
+  const asteriskOnline = data.system?.asterisk === "available";
+
+  const endpoints = data.endpoints?.endpoints ?? [];
+  const channels = data.channels?.channels ?? [];
+  const activeCalls = data.asterisk?.current_calls ?? 0;
+
+  function formatTimestamp(value) {
+    if (!value) return "Not available";
+    return value;
+  }
 
   return (
     <main className="shell">
-      <header>
-        <div className="eyebrow">TELEPHONY OPERATIONS</div>
-        <h1>PBX Management</h1>
-        <p className="muted">
-          Your private platform for monitoring and managing your PBX.
-        </p>
+      <header className="topbar">
+        <div>
+          <div className="eyebrow">TELEPHONY OPERATIONS</div>
+          <h1>PBX Management</h1>
+          <p className="muted">
+            Centralized monitoring for your Asterisk telephony infrastructure.
+          </p>
+        </div>
+        <div className="header-status">
+          <span className={`indicator ${asteriskOnline ? "online" : "offline"}`} />
+          {asteriskOnline ? "PBX connected" : "PBX unavailable"}
+        </div>
       </header>
 
       <section className="banner">
         <div>
           <div className="eyebrow">SYSTEM OVERVIEW</div>
-          <h2>Infrastructure status</h2>
-          <p className="muted">Initial application health checks</p>
+          <h2>Infrastructure monitoring</h2>
+          <p className="muted">
+            Monitoring-only dashboard · Automatic refresh every 10 seconds
+          </p>
+          <p className="updated">
+            Last updated: {lastUpdated ? lastUpdated.toLocaleTimeString() : "Loading"}
+          </p>
         </div>
-        <button onClick={refreshStatus}>Refresh</button>
+        <button onClick={refreshDashboard} disabled={loading}>
+          {loading ? "Refreshing..." : "Refresh now"}
+        </button>
       </section>
 
-      {error && <p className="error">{error}</p>}
+      {error && <div className="notice">{error}</div>}
 
-      <section className="grid">
-        {items.map(([name, value]) => (
-          <article className="card" key={name}>
-            <div className="muted">{name}</div>
-            <div className="value">{value}</div>
-          </article>
-        ))}
+      <section className="section">
+        <div className="section-heading">
+          <h2>Platform health</h2>
+          <span className="muted">{loading ? "Updating..." : "Live monitoring"}</span>
+        </div>
+
+        <div className="grid">
+          <Metric
+            label="API backend"
+            value={systemOnline ? "Online" : "Unavailable"}
+            detail="FastAPI application"
+            state={systemOnline ? "online" : "offline"}
+          />
+          <Metric
+            label="PostgreSQL"
+            value={databaseOnline ? "Connected" : "Unavailable"}
+            detail="Application database"
+            state={databaseOnline ? "online" : "offline"}
+          />
+          <Metric
+            label="Asterisk PBX"
+            value={asteriskOnline ? "Connected" : "Unavailable"}
+            detail={data.asterisk?.asterisk_version ?? "Version unavailable"}
+            state={asteriskOnline ? "online" : "offline"}
+          />
+          <Metric
+            label="Active calls"
+            value={data.asterisk?.current_calls ?? "—"}
+            detail="Current Asterisk calls"
+          />
+        </div>
       </section>
 
-      <section className="panel">
-        <h2>Next integration</h2>
-        <p className="muted">
-          Asterisk monitoring will be enabled after the secure host-side
-          integration gateway is designed and approved.
-        </p>
+      <section className="section">
+        <div className="section-heading">
+          <h2>Extension monitoring</h2>
+          <span className="muted">{endpoints.length} endpoint(s)</span>
+        </div>
+
+        <div className="panel table-panel">
+          {endpoints.length ? (
+            <div className="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Extension</th>
+                    <th>Device state</th>
+                    <th>Active channels</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {endpoints.map((endpoint) => (
+                    <tr key={endpoint.name}>
+                      <td className="extension-name">{endpoint.name}</td>
+                      <td>
+                        <span className="state-label">
+                          {endpoint.device_state ?? "Unknown"}
+                        </span>
+                      </td>
+                      <td>{endpoint.active_channels ?? 0}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="muted">
+              {data.endpoints ? "No endpoints returned by Asterisk." : "Endpoint data unavailable."}
+            </p>
+          )}
+          <p className="table-note">
+            Device state is not a confirmation of SIP registration.
+          </p>
+        </div>
       </section>
 
-      <footer>PBX Management · Initial release 0.1.0</footer>
+      <section className="section">
+        <div className="section-heading">
+          <h2>Active channels</h2>
+          <span className="muted">{channels.length} channel(s)</span>
+        </div>
+
+        <div className="panel table-panel">
+          {channels.length ? (
+            <div className="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Channel</th>
+                    <th>State</th>
+                    <th>Duration</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {channels.map((channel, index) => (
+                    <tr key={channel.channel ?? index}>
+                      <td>{channel.channel ?? "—"}</td>
+                      <td>{channel.state ?? "—"}</td>
+                      <td>{channel.duration ?? "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="muted">
+              {data.channels ? "No active channels." : "Channel data unavailable."}
+            </p>
+          )}
+        </div>
+      </section>
+
+      <section className="section">
+        <div className="section-heading">
+          <h2>Asterisk information</h2>
+        </div>
+
+        <div className="grid">
+          <Metric
+            label="Asterisk version"
+            value={data.settings?.asterisk_version ?? "—"}
+          />
+          <Metric
+            label="AMI version"
+            value={data.settings?.ami_version ?? "—"}
+          />
+          <Metric
+            label="CDR"
+            value={data.settings?.cdr_enabled ?? "—"}
+            detail="Call detail records"
+          />
+          <Metric
+            label="HTTP service"
+            value={data.settings?.http_enabled ?? "—"}
+          />
+        </div>
+
+        <div className="panel startup-panel">
+          <div>
+            <span className="muted">Asterisk startup date</span>
+            <strong>{formatTimestamp(data.asterisk?.startup_date)}</strong>
+          </div>
+          <div>
+            <span className="muted">Asterisk startup time</span>
+            <strong>{formatTimestamp(data.asterisk?.startup_time)}</strong>
+          </div>
+          <div>
+            <span className="muted">Realtime configuration</span>
+            <strong>{data.settings?.realtime_enabled ?? "—"}</strong>
+          </div>
+        </div>
+      </section>
+
+      <footer>
+        PBX Management · Phase 3 · Secure monitoring interface
+        <span>Call control and configuration changes are not exposed.</span>
+      </footer>
     </main>
   );
 }
