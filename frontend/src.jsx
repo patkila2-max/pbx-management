@@ -32,6 +32,7 @@ function App() {
     settings: null,
     channels: null,
     endpoints: null,
+    contacts: null,
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -46,6 +47,7 @@ function App() {
       ["settings", "/api/asterisk/settings"],
       ["channels", "/api/asterisk/channels"],
       ["endpoints", "/api/asterisk/endpoints"],
+      ["contacts", "/api/asterisk/contacts"],
     ];
 
     const results = await Promise.allSettled(
@@ -88,8 +90,38 @@ function App() {
   const asteriskOnline = data.system?.asterisk === "available";
 
   const endpoints = data.endpoints?.endpoints ?? [];
+  const contacts = data.contacts?.contacts ?? [];
   const channels = data.channels?.channels ?? [];
   const activeCalls = data.asterisk?.current_calls ?? 0;
+
+  const contactsByEndpoint = Object.fromEntries(
+    contacts.map((contact) => [contact.endpoint, contact])
+  );
+
+  const registeredCount = endpoints.filter(
+    (endpoint) => contactsByEndpoint[endpoint.name]
+  ).length;
+
+  const noContactCount = Math.max(0, endpoints.length - registeredCount);
+
+  function formatExpiration(value) {
+    if (!value) return "Not available";
+
+    const expirationDate = new Date(value * 1000);
+    const remainingSeconds = Math.floor(value - Date.now() / 1000);
+
+    if (remainingSeconds <= 0) return "Expired";
+
+    const minutes = Math.floor(remainingSeconds / 60);
+    const seconds = remainingSeconds % 60;
+
+    const remaining =
+      minutes >= 60
+        ? `${Math.floor(minutes / 60)}h ${minutes % 60}m`
+        : `${minutes}m ${seconds}s`;
+
+    return `${remaining} · ${expirationDate.toLocaleTimeString()}`;
+  }
 
   function formatTimestamp(value) {
     if (!value) return "Not available";
@@ -165,8 +197,30 @@ function App() {
 
       <section className="section">
         <div className="section-heading">
-          <h2>Extension monitoring</h2>
-          <span className="muted">{endpoints.length} endpoint(s)</span>
+          <h2>SIP registration monitoring</h2>
+          <span className="muted">
+            {endpoints.length} configured endpoint(s)
+          </span>
+        </div>
+
+        <div className="grid registration-summary">
+          <Metric
+            label="Contacts present"
+            value={data.contacts ? registeredCount : "—"}
+            detail="Endpoints with a current PJSIP contact"
+            state="online"
+          />
+          <Metric
+            label="No contact found"
+            value={data.contacts ? noContactCount : "—"}
+            detail="Configured endpoints without a current contact"
+            state={noContactCount ? "offline" : "online"}
+          />
+          <Metric
+            label="Total configured"
+            value={data.endpoints ? endpoints.length : "—"}
+            detail="PJSIP endpoints"
+          />
         </div>
 
         <div className="panel table-panel">
@@ -176,33 +230,67 @@ function App() {
                 <thead>
                   <tr>
                     <th>Extension</th>
+                    <th>Registration</th>
                     <th>Device state</th>
+                    <th>Contact IP</th>
+                    <th>Port</th>
+                    <th>SIP client</th>
+                    <th>Expiration</th>
                     <th>Active channels</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {endpoints.map((endpoint) => (
-                    <tr key={endpoint.name}>
-                      <td className="extension-name">{endpoint.name}</td>
-                      <td>
-                        <span className="state-label">
-                          {endpoint.device_state ?? "Unknown"}
-                        </span>
-                      </td>
-                      <td>{endpoint.active_channels ?? 0}</td>
-                    </tr>
-                  ))}
+                  {endpoints.map((endpoint) => {
+                    const contact = contactsByEndpoint[endpoint.name];
+
+                    return (
+                      <tr key={endpoint.name}>
+                        <td className="extension-name">{endpoint.name}</td>
+                        <td>
+                          <span className={`registration-badge ${contact ? "present" : "missing"}`}>
+                            {contact ? "Contact present" : "No contact"}
+                          </span>
+                        </td>
+                        <td>
+                          <span className="state-label">
+                            {endpoint.device_state ?? "Unknown"}
+                          </span>
+                        </td>
+                        <td>{contact?.ip_address ?? "—"}</td>
+                        <td>{contact?.port ?? "—"}</td>
+                        <td className="user-agent">
+                          {contact?.user_agent ?? "—"}
+                        </td>
+                        <td className="expiration">
+                          {contact
+                            ? formatExpiration(contact.expiration_time)
+                            : "—"}
+                        </td>
+                        <td>{endpoint.active_channels ?? 0}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
           ) : (
             <p className="muted">
-              {data.endpoints ? "No endpoints returned by Asterisk." : "Endpoint data unavailable."}
+              {data.endpoints
+                ? "No endpoints returned by Asterisk."
+                : "Endpoint data unavailable."}
             </p>
           )}
+
           <p className="table-note">
-            Device state is not a confirmation of SIP registration.
+            Contact presence confirms that Asterisk has a PJSIP contact.
+            NonQualified means qualification is not being performed; it does
+            not establish reachability.
           </p>
+          {!data.contacts && (
+            <p className="table-note">
+              SIP contact information is currently unavailable.
+            </p>
+          )}
         </div>
       </section>
 
@@ -284,7 +372,7 @@ function App() {
       </section>
 
       <footer>
-        PBX Management · Phase 3 · Secure monitoring interface
+        PBX Management · Phase 4 · Secure monitoring interface
         <span>Call control and configuration changes are not exposed.</span>
       </footer>
     </main>
