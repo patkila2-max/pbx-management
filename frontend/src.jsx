@@ -25,6 +25,337 @@ function Metric({ label, value, detail, state }) {
   );
 }
 
+function CDRSection() {
+  const [summary, setSummary] = useState(null);
+  const [importStatus, setImportStatus] = useState(null);
+  const [records, setRecords] = useState([]);
+  const [pagination, setPagination] = useState(null);
+  const [selectedRecord, setSelectedRecord] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [page, setPage] = useState(1);
+
+  const [filters, setFilters] = useState({
+    start_date: "",
+    end_date: "",
+    src: "",
+    dst: "",
+    disposition: "",
+  });
+
+  const [appliedFilters, setAppliedFilters] = useState({
+    start_date: "",
+    end_date: "",
+    src: "",
+    dst: "",
+    disposition: "",
+  });
+
+  const PAGE_SIZE = 25;
+
+  const refreshCDR = useCallback(async () => {
+    setLoading(true);
+    setError("");
+
+    try {
+      const params = new URLSearchParams({
+        page: String(page),
+        page_size: String(PAGE_SIZE),
+        sort_by: "start_time",
+        sort_order: "desc",
+      });
+
+      Object.entries(appliedFilters).forEach(([key, value]) => {
+        if (value) params.set(key, value);
+      });
+
+      const [history, totals, status] = await Promise.all([
+        fetchJSON(`/api/cdr?${params.toString()}`),
+        fetchJSON("/api/cdr/summary"),
+        fetchJSON("/api/cdr/import-status"),
+      ]);
+
+      setRecords(history.items ?? []);
+      setPagination(history.pagination ?? null);
+      setSummary(totals);
+      setImportStatus(status);
+    } catch (err) {
+      setError(`Unable to load call history: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  }, [page, appliedFilters]);
+
+  useEffect(() => {
+    refreshCDR();
+  }, [refreshCDR]);
+
+  function applyFilters(event) {
+    event.preventDefault();
+    setPage(1);
+    setAppliedFilters({ ...filters });
+  }
+
+  function clearFilters() {
+    const empty = {
+      start_date: "",
+      end_date: "",
+      src: "",
+      dst: "",
+      disposition: "",
+    };
+
+    setFilters(empty);
+    setPage(1);
+    setAppliedFilters(empty);
+  }
+
+  async function viewRecord(id) {
+    setSelectedRecord(null);
+    try {
+      const record = await fetchJSON(`/api/cdr/${id}`);
+      setSelectedRecord(record);
+    } catch (err) {
+      setError(`Unable to load call details: ${err.message}`);
+    }
+  }
+
+  function formatDate(value) {
+    if (!value) return "—";
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime())
+      ? value
+      : parsed.toLocaleString();
+  }
+
+  function formatDuration(value) {
+    const seconds = Number(value || 0);
+    const minutes = Math.floor(seconds / 60);
+    return `${minutes}:${String(seconds % 60).padStart(2, "0")}`;
+  }
+
+  function dispositionClass(value) {
+    return String(value || "").toLowerCase().replace(/\s+/g, "-");
+  }
+
+  return (
+    <section className="section cdr-section">
+      <div className="section-heading">
+        <div>
+          <div className="eyebrow">CALL ANALYTICS</div>
+          <h2>Call Detail Records</h2>
+          <p className="muted">Historical call activity and call statistics</p>
+        </div>
+        <button onClick={refreshCDR} disabled={loading}>
+          {loading ? "Loading..." : "Refresh CDR"}
+        </button>
+      </div>
+
+      {summary && (
+        <div className="grid cdr-summary">
+          <Metric label="Total calls" value={summary.total_calls} detail="Recorded calls" />
+          <Metric label="Answered" value={summary.answered} detail="Successfully answered" state="online" />
+          <Metric label="No answer" value={summary.no_answer} detail="Unanswered calls" />
+          <Metric label="Busy" value={summary.busy} detail="Busy destinations" />
+          <Metric label="Failed" value={summary.failed} detail="Failed or congested calls" />
+        </div>
+      )}
+
+      <div className="panel cdr-import-panel">
+        <div>
+          <span className="muted">CDR import status</span>
+          <strong className={`import-state ${importStatus?.last_status === "success" ? "success" : ""}`}>
+            {importStatus?.last_status ?? "Unavailable"}
+          </strong>
+        </div>
+        <div>
+          <span className="muted">Records in database</span>
+          <strong>{importStatus?.total_records ?? "—"}</strong>
+        </div>
+        <div>
+          <span className="muted">Last import (UTC)</span>
+          <strong>
+            {importStatus?.last_import_at
+              ? formatDate(importStatus.last_import_at)
+              : "Not available"}
+          </strong>
+        </div>
+      </div>
+
+      <form className="panel cdr-filters" onSubmit={applyFilters}>
+        <div className="cdr-filter-grid">
+          <label>
+            Start date
+            <input
+              type="date"
+              value={filters.start_date}
+              onChange={(event) => setFilters({ ...filters, start_date: event.target.value })}
+            />
+          </label>
+          <label>
+            End date
+            <input
+              type="date"
+              value={filters.end_date}
+              onChange={(event) => setFilters({ ...filters, end_date: event.target.value })}
+            />
+          </label>
+          <label>
+            Source
+            <input
+              type="text"
+              maxLength="64"
+              placeholder="Source extension"
+              value={filters.src}
+              onChange={(event) => setFilters({ ...filters, src: event.target.value })}
+            />
+          </label>
+          <label>
+            Destination
+            <input
+              type="text"
+              maxLength="64"
+              placeholder="Destination extension"
+              value={filters.dst}
+              onChange={(event) => setFilters({ ...filters, dst: event.target.value })}
+            />
+          </label>
+          <label>
+            Disposition
+            <select
+              value={filters.disposition}
+              onChange={(event) => setFilters({ ...filters, disposition: event.target.value })}
+            >
+              <option value="">All dispositions</option>
+              <option value="ANSWERED">Answered</option>
+              <option value="NO ANSWER">No answer</option>
+              <option value="BUSY">Busy</option>
+              <option value="FAILED">Failed</option>
+              <option value="CONGESTION">Congestion</option>
+            </select>
+          </label>
+        </div>
+        <div className="cdr-filter-actions">
+          <button type="submit">Apply filters</button>
+          <button type="button" className="secondary-button" onClick={clearFilters}>
+            Clear filters
+          </button>
+        </div>
+      </form>
+
+      {error && <div className="notice">{error}</div>}
+
+      <div className="panel table-panel">
+        <div className="cdr-table-heading">
+          <strong>Call history</strong>
+          <span className="muted">
+            {pagination ? `${pagination.total} matching record(s)` : "Loading records"}
+          </span>
+        </div>
+
+        <div className="table-scroll">
+          <table className="cdr-table">
+            <thead>
+              <tr>
+                <th>Date / time</th>
+                <th>Source</th>
+                <th>Destination</th>
+                <th>Duration</th>
+                <th>Talk time</th>
+                <th>Disposition</th>
+                <th>Details</th>
+              </tr>
+            </thead>
+            <tbody>
+              {records.map((record) => (
+                <tr key={record.id}>
+                  <td>{formatDate(record.start_time)}</td>
+                  <td>{record.src || "—"}</td>
+                  <td>{record.dst || "—"}</td>
+                  <td>{formatDuration(record.duration)}</td>
+                  <td>{formatDuration(record.billsec)}</td>
+                  <td>
+                    <span className={`cdr-badge ${dispositionClass(record.disposition)}`}>
+                      {record.disposition}
+                    </span>
+                  </td>
+                  <td>
+                    <button className="small-button" onClick={() => viewRecord(record.id)}>
+                      View
+                    </button>
+                  </td>
+                </tr>
+              ))}
+              {!records.length && (
+                <tr>
+                  <td colSpan="7" className="cdr-empty">
+                    {loading ? "Loading call records..." : "No call records found."}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="cdr-pagination">
+          <button
+            className="secondary-button"
+            disabled={loading || page <= 1}
+            onClick={() => setPage((current) => Math.max(1, current - 1))}
+          >
+            Previous
+          </button>
+          <span className="muted">
+            Page {pagination?.page ?? page} of {pagination?.pages ?? 0}
+          </span>
+          <button
+            className="secondary-button"
+            disabled={loading || !pagination || page >= pagination.pages}
+            onClick={() => setPage((current) => current + 1)}
+          >
+            Next
+          </button>
+        </div>
+      </div>
+
+      {selectedRecord && (
+        <div className="panel cdr-detail">
+          <div className="section-heading">
+            <h2>Call details · Record #{selectedRecord.id}</h2>
+            <button className="secondary-button" onClick={() => setSelectedRecord(null)}>
+              Close
+            </button>
+          </div>
+          <div className="cdr-detail-grid">
+            {[
+              ["Source", selectedRecord.src],
+              ["Destination", selectedRecord.dst],
+              ["Context", selectedRecord.dcontext],
+              ["Channel", selectedRecord.channel],
+              ["Destination channel", selectedRecord.dstchannel],
+              ["Application", selectedRecord.lastapp],
+              ["Application data", selectedRecord.lastdata],
+              ["Start time", formatDate(selectedRecord.start_time)],
+              ["Answer time", formatDate(selectedRecord.answer_time)],
+              ["End time", formatDate(selectedRecord.end_time)],
+              ["Duration", formatDuration(selectedRecord.duration)],
+              ["Talk time", formatDuration(selectedRecord.billsec)],
+              ["Disposition", selectedRecord.disposition],
+              ["AMA flags", selectedRecord.amaflags],
+            ].map(([label, value]) => (
+              <div key={label}>
+                <span className="muted">{label}</span>
+                <strong>{value || "—"}</strong>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+
 function App() {
   const [data, setData] = useState({
     system: null,
@@ -349,6 +680,8 @@ function App() {
           )}
         </div>
       </section>
+
+      <CDRSection />
 
       <section className="section">
         <div className="section-heading">
