@@ -307,18 +307,38 @@ function App() {
                 <thead>
                   <tr>
                     <th>Channel</th>
+                    <th>Caller</th>
+                    <th>Connected party</th>
+                    <th>Destination</th>
                     <th>State</th>
                     <th>Duration</th>
+                    <th>Application</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {channels.map((channel, index) => (
-                    <tr key={channel.channel ?? index}>
-                      <td>{channel.channel ?? "—"}</td>
-                      <td>{channel.state ?? "—"}</td>
-                      <td>{channel.duration ?? "—"}</td>
-                    </tr>
-                  ))}
+                  {channels.map((channel, index) => {
+                    const formatParty = (value) => {
+                      if (!value || value === "<unknown>") return "—";
+                      const number = String(value);
+                      return /^\d{2,6}$/.test(number)
+                        ? number
+                        : number.length > 4
+                          ? `${"*".repeat(number.length - 4)}${number.slice(-4)}`
+                          : number;
+                    };
+
+                    return (
+                      <tr key={channel.channel ?? index}>
+                        <td>{channel.channel ?? "—"}</td>
+                        <td>{formatParty(channel.caller_id_num)}</td>
+                        <td>{formatParty(channel.connected_line_num)}</td>
+                        <td>{channel.destination || "—"}</td>
+                        <td>{channel.channel_state ?? "—"}</td>
+                        <td>{channel.duration ?? "—"}</td>
+                        <td>{channel.application ?? "—"}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
