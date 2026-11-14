@@ -93,3 +93,8 @@ def asterisk_channels():
 @app.get("/api/asterisk/endpoints")
 def asterisk_endpoints():
     return get_asterisk_data("endpoints")
+
+
+@app.get("/api/asterisk/contacts")
+def asterisk_contacts():
+    return get_asterisk_data("contacts")
