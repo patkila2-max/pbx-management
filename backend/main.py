@@ -5,6 +5,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from asterisk_gateway import gateway_request, GatewayError
+from cdr_api import router as cdr_router
 
 app = FastAPI(
     title="PBX Management API",
@@ -98,3 +99,5 @@ def asterisk_endpoints():
 @app.get("/api/asterisk/contacts")
 def asterisk_contacts():
     return get_asterisk_data("contacts")
+
+app.include_router(cdr_router)
