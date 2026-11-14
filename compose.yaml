@@ -29,6 +29,7 @@ services:
       PGPASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the deployment environment}
     volumes:
       - /var/lib/pbx-gateway/run:/run/pbx-gateway:ro
+      - /var/log/asterisk/cdr-csv:/var/lib/pbx-cdr:ro
     depends_on:
       db:
         condition: service_healthy

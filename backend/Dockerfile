@@ -8,7 +8,7 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY main.py asterisk_gateway.py ./
+COPY main.py asterisk_gateway.py cdr_importer.py ./
 
 RUN useradd --system --uid 10001 appuser
 USER appuser
