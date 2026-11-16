@@ -483,3 +483,18 @@ footer {
 }
 
 /* ===== END CDR STYLES ===== */
+
+
+/* ===== LIVE CALL QUALITY ===== */
+
+.quality-summary {
+  margin: 16px 0;
+}
+
+.quality-table {
+  min-width: 1250px;
+}
+
+.quality-table td {
+  white-space: nowrap;
+}

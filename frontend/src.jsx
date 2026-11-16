@@ -364,6 +364,7 @@ function App() {
     channels: null,
     endpoints: null,
     contacts: null,
+    callQuality: null,
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -379,6 +380,7 @@ function App() {
       ["channels", "/api/asterisk/channels"],
       ["endpoints", "/api/asterisk/endpoints"],
       ["contacts", "/api/asterisk/contacts"],
+      ["callQuality", "/api/asterisk/call-quality"],
     ];
 
     const results = await Promise.allSettled(
@@ -424,6 +426,7 @@ function App() {
   const contacts = data.contacts?.contacts ?? [];
   const channels = data.channels?.channels ?? [];
   const activeCalls = data.asterisk?.current_calls ?? 0;
+  const qualityChannels = data.callQuality?.channels ?? [];
 
   const contactsByEndpoint = Object.fromEntries(
     contacts.map((contact) => [contact.endpoint, contact])
@@ -457,6 +460,18 @@ function App() {
   function formatTimestamp(value) {
     if (!value) return "Not available";
     return value;
+  }
+
+  function formatMilliseconds(value) {
+    if (value === null || value === undefined || value === "") return "—";
+    const number = Number(value);
+    return Number.isFinite(number) ? `${(number * 1000).toFixed(2)} ms` : "—";
+  }
+
+  function formatMes(value) {
+    if (value === null || value === undefined || value === "") return "—";
+    const number = Number(value);
+    return Number.isFinite(number) ? number.toFixed(1) : "—";
   }
 
   return (
@@ -678,6 +693,99 @@ function App() {
               {data.channels ? "No active channels." : "Channel data unavailable."}
             </p>
           )}
+        </div>
+      </section>
+
+
+      <section className="section">
+        <div className="section-heading">
+          <div>
+            <h2>Live call quality</h2>
+            <p className="muted">
+              Real-time RTCP statistics for active PJSIP channels
+            </p>
+          </div>
+          <span className="muted">
+            {data.callQuality
+              ? `${data.callQuality.count ?? 0} active channel(s)`
+              : "Quality data unavailable"}
+          </span>
+        </div>
+
+        <div className="grid quality-summary">
+          <Metric
+            label="Active PJSIP channels"
+            value={data.callQuality?.count ?? "—"}
+            detail="Channels returned by Asterisk"
+          />
+          <Metric
+            label="RTCP available"
+            value={data.callQuality
+              ? qualityChannels.filter((channel) => channel.available).length
+              : "—"}
+            detail="Channels with RTCP statistics"
+          />
+        </div>
+
+        <div className="panel table-panel">
+          {qualityChannels.length ? (
+            <div className="table-scroll">
+              <table className="quality-table">
+                <thead>
+                  <tr>
+                    <th>Channel</th>
+                    <th>State</th>
+                    <th>RTCP</th>
+                    <th>RX packets</th>
+                    <th>Local lost</th>
+                    <th>TX packets</th>
+                    <th>Remote lost</th>
+                    <th>RX jitter</th>
+                    <th>TX jitter</th>
+                    <th>RTT</th>
+                    <th>RX MES</th>
+                    <th>TX MES</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {qualityChannels.map((channel) => {
+                    const rtcp = channel.rtcp ?? {};
+                    return (
+                      <tr key={channel.channel}>
+                        <td className="extension-name">{channel.channel}</td>
+                        <td>{channel.channel_state ?? "—"}</td>
+                        <td>
+                          <span className={`registration-badge ${channel.available ? "present" : "missing"}`}>
+                            {channel.available ? "Available" : "Unavailable"}
+                          </span>
+                        </td>
+                        <td>{rtcp.receive_packets ?? "—"}</td>
+                        <td>{rtcp.local_lost_packets ?? "—"}</td>
+                        <td>{rtcp.transmit_packets ?? "—"}</td>
+                        <td>{rtcp.remote_lost_packets ?? "—"}</td>
+                        <td>{channel.available ? formatMilliseconds(rtcp.receive_jitter) : "—"}</td>
+                        <td>{channel.available ? formatMilliseconds(rtcp.transmit_jitter) : "—"}</td>
+                        <td>{channel.available ? formatMilliseconds(rtcp.round_trip_time) : "—"}</td>
+                        <td>{channel.available ? formatMes(rtcp.receive_mes) : "—"}</td>
+                        <td>{channel.available ? formatMes(rtcp.transmit_mes) : "—"}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="muted">
+              {data.callQuality
+                ? "No active PJSIP calls. Make a test call to view live RTCP statistics."
+                : "Call quality data is currently unavailable."}
+            </p>
+          )}
+          <p className="table-note">
+            Jitter and round-trip time are displayed in milliseconds.
+            Local loss and remote-reported loss are separate RTCP counters.
+            MES values are shown without applying unverified quality thresholds.
+          </p>
         </div>
       </section>
 
