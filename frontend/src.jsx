@@ -356,6 +356,341 @@ function CDRSection() {
 }
 
 
+
+function SystemEventsSection() {
+  const [summary, setSummary] = useState(null);
+  const [events, setEvents] = useState([]);
+  const [alarms, setAlarms] = useState([]);
+  const [alarmHistory, setAlarmHistory] = useState([]);
+  const [category, setCategory] = useState("");
+  const [severity, setSeverity] = useState("");
+  const [error, setError] = useState("");
+  const [lastUpdated, setLastUpdated] = useState(null);
+
+  const refreshEvents = useCallback(async () => {
+    const params = new URLSearchParams({
+      page: "1",
+      page_size: "25",
+    });
+
+    if (category) params.set("category", category);
+    if (severity) params.set("severity", severity);
+
+    const results = await Promise.allSettled([
+      fetchJSON("/api/events/summary"),
+      fetchJSON(`/api/events?${params.toString()}`),
+      fetchJSON("/api/alarms?page=1&page_size=25"),
+      fetchJSON("/api/alarms/history?page=1&page_size=25"),
+    ]);
+
+    const failures = [];
+
+    if (results[0].status === "fulfilled") {
+      setSummary(results[0].value);
+    } else {
+      failures.push("event summary");
+    }
+
+    if (results[1].status === "fulfilled") {
+      setEvents(results[1].value.items ?? []);
+    } else {
+      failures.push("event history");
+    }
+
+    if (results[2].status === "fulfilled") {
+      setAlarms(results[2].value.items ?? []);
+    } else {
+      failures.push("active alarms");
+    }
+
+    if (results[3].status === "fulfilled") {
+      setAlarmHistory(results[3].value.items ?? []);
+    } else {
+      failures.push("alarm history");
+    }
+
+    setError(
+      failures.length
+        ? `Unable to load: ${failures.join(", ")}`
+        : ""
+    );
+
+    setLastUpdated(new Date());
+  }, [category, severity]);
+
+  useEffect(() => {
+    refreshEvents();
+
+    const timer = window.setInterval(
+      refreshEvents,
+      REFRESH_INTERVAL
+    );
+
+    return () => window.clearInterval(timer);
+  }, [refreshEvents]);
+
+  function formatDate(value) {
+    if (!value) return "—";
+
+    const date = new Date(value);
+
+    return Number.isNaN(date.getTime())
+      ? "—"
+      : date.toLocaleString();
+  }
+
+  function severityClass(value) {
+    return `event-severity ${value || "info"}`;
+  }
+
+  return (
+    <section className="section events-section">
+      <div className="section-heading">
+        <div>
+          <h2>System Events &amp; Alarms</h2>
+          <p className="muted">
+            Asterisk operational events and alarm monitoring
+          </p>
+        </div>
+
+        <button
+          className="secondary-button"
+          onClick={refreshEvents}
+        >
+          Refresh events
+        </button>
+      </div>
+
+      {error && <div className="notice">{error}</div>}
+
+      <div className="grid events-summary">
+        <Metric
+          label="Total events"
+          value={summary?.totals?.total_events ?? "—"}
+          detail="Recorded system events"
+        />
+        <Metric
+          label="Last 24 hours"
+          value={summary?.totals?.events_last_24h ?? "—"}
+          detail="Recently received events"
+        />
+        <Metric
+          label="Warnings"
+          value={summary?.totals?.warnings ?? "—"}
+          detail="Warning severity"
+        />
+        <Metric
+          label="Critical events"
+          value={summary?.totals?.critical_events ?? "—"}
+          detail="Critical severity"
+          state={summary?.totals?.critical_events ? "offline" : "online"}
+        />
+        <Metric
+          label="Active alarms"
+          value={alarms.length}
+          detail="Alarms on current page"
+          state={alarms.some(a => a.severity === "critical") ? "offline" : "online"}
+        />
+      </div>
+
+      <div className="panel events-panel">
+        <div className="events-panel-heading">
+          <div>
+            <h3>Active alarms</h3>
+            <p className="muted">
+              Critical alarms are displayed first
+            </p>
+          </div>
+          <span className="muted">
+            {alarms.length} displayed
+          </span>
+        </div>
+
+        {alarms.length ? (
+          <div className="table-scroll">
+            <table className="events-table">
+              <thead>
+                <tr>
+                  <th>Severity</th>
+                  <th>Event</th>
+                  <th>Category</th>
+                  <th>Details</th>
+                  <th>Received</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {alarms.map(alarm => (
+                  <tr key={alarm.event_key}>
+                    <td>
+                      <span className={severityClass(alarm.severity)}>
+                        {alarm.severity}
+                      </span>
+                    </td>
+                    <td>{alarm.summary}</td>
+                    <td>{alarm.category}</td>
+                    <td>{JSON.stringify(alarm.details)}</td>
+                    <td>{formatDate(alarm.received_at)}</td>
+                    <td>
+                      <span className="event-status active">
+                        Active
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="events-empty">
+            No active alarms currently recorded.
+          </div>
+        )}
+      </div>
+
+      <div className="panel events-panel">
+        <div className="events-panel-heading">
+          <div>
+            <h3>System event history</h3>
+            <p className="muted">
+              Latest recorded Asterisk events
+            </p>
+          </div>
+          <span className="muted">
+            {events.length} displayed
+          </span>
+        </div>
+
+        <div className="events-filters">
+          <label>
+            Category
+            <select
+              value={category}
+              onChange={e => setCategory(e.target.value)}
+            >
+              <option value="">All categories</option>
+              <option value="system">System</option>
+              <option value="sip">SIP</option>
+              <option value="call">Call</option>
+            </select>
+          </label>
+
+          <label>
+            Severity
+            <select
+              value={severity}
+              onChange={e => setSeverity(e.target.value)}
+            >
+              <option value="">All severities</option>
+              <option value="info">Info</option>
+              <option value="warning">Warning</option>
+              <option value="critical">Critical</option>
+            </select>
+          </label>
+        </div>
+
+        {events.length ? (
+          <div className="table-scroll">
+            <table className="events-table">
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>Event</th>
+                  <th>Category</th>
+                  <th>Severity</th>
+                  <th>Summary</th>
+                  <th>Details</th>
+                </tr>
+              </thead>
+              <tbody>
+                {events.map(event => (
+                  <tr key={event.event_key}>
+                    <td>{formatDate(event.received_at)}</td>
+                    <td>{event.event_type}</td>
+                    <td>{event.category}</td>
+                    <td>
+                      <span className={severityClass(event.severity)}>
+                        {event.severity}
+                      </span>
+                    </td>
+                    <td>{event.summary}</td>
+                    <td>{JSON.stringify(event.details)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="events-empty">
+            No events match the selected filters.
+          </div>
+        )}
+      </div>
+
+      <div className="panel events-panel">
+        <div className="events-panel-heading">
+          <div>
+            <h3>Alarm history</h3>
+            <p className="muted">
+              Active and resolved alarm records
+            </p>
+          </div>
+          <span className="muted">
+            {alarmHistory.length} displayed
+          </span>
+        </div>
+
+        {alarmHistory.length ? (
+          <div className="table-scroll">
+            <table className="events-table">
+              <thead>
+                <tr>
+                  <th>Event</th>
+                  <th>Severity</th>
+                  <th>Summary</th>
+                  <th>Occurred</th>
+                  <th>Status</th>
+                  <th>Resolved</th>
+                </tr>
+              </thead>
+              <tbody>
+                {alarmHistory.map(alarm => (
+                  <tr key={alarm.event_key}>
+                    <td>{alarm.event_type}</td>
+                    <td>
+                      <span className={severityClass(alarm.severity)}>
+                        {alarm.severity}
+                      </span>
+                    </td>
+                    <td>{alarm.summary}</td>
+                    <td>{formatDate(alarm.occurred_at)}</td>
+                    <td>
+                      <span className={`event-status ${alarm.alarm_status}`}>
+                        {alarm.alarm_status}
+                      </span>
+                    </td>
+                    <td>{formatDate(alarm.resolved_at)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="events-empty">
+            No alarm history recorded.
+          </div>
+        )}
+      </div>
+
+      <p className="table-note">
+        Last updated: {lastUpdated ? lastUpdated.toLocaleTimeString() : "Loading"}
+        {" · "}Automatic refresh every 10 seconds.
+        {" "}All alarm and event controls are read-only.
+      </p>
+    </section>
+  );
+}
+
 function App() {
   const [data, setData] = useState({
     system: null,
@@ -788,6 +1123,8 @@ function App() {
           </p>
         </div>
       </section>
+
+      <SystemEventsSection />
 
       <CDRSection />
 

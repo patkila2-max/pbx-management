@@ -498,3 +498,135 @@ footer {
 .quality-table td {
   white-space: nowrap;
 }
+
+/* ===== SYSTEM EVENTS AND ALARMS ===== */
+
+.events-section {
+  margin-top: 34px;
+}
+
+.events-summary {
+  grid-template-columns: repeat(auto-fit, minmax(155px, 1fr));
+  margin: 18px 0;
+}
+
+.events-panel {
+  margin-top: 18px;
+  overflow: hidden;
+}
+
+.events-panel-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 16px;
+  border-bottom: 1px solid #273449;
+}
+
+.events-panel-heading h3 {
+  margin: 0 0 5px;
+  font-size: 16px;
+}
+
+.events-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding: 15px 16px;
+}
+
+.events-filters label {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  color: #9ca3af;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.events-filters select {
+  min-width: 160px;
+  padding: 9px 11px;
+  border: 1px solid #374151;
+  border-radius: 7px;
+  background: #111827;
+  color: #e5e7eb;
+  font: inherit;
+  font-size: 13px;
+}
+
+.events-filters select:focus {
+  outline: 2px solid #3b82f6;
+  outline-offset: 1px;
+}
+
+.events-table {
+  min-width: 850px;
+}
+
+.events-table td {
+  max-width: 280px;
+  overflow-wrap: anywhere;
+}
+
+.event-severity,
+.event-status {
+  display: inline-block;
+  padding: 5px 9px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.event-severity.info {
+  background: #1e3a5f;
+  color: #bfdbfe;
+}
+
+.event-severity.warning {
+  background: #713f12;
+  color: #fde68a;
+}
+
+.event-severity.critical {
+  background: #7f1d1d;
+  color: #fecaca;
+}
+
+.event-status.active {
+  background: #7f1d1d;
+  color: #fecaca;
+}
+
+.event-status.resolved {
+  background: #14532d;
+  color: #bbf7d0;
+}
+
+.events-empty {
+  padding: 28px 18px;
+  color: #9ca3af;
+  text-align: center;
+}
+
+@media (max-width: 650px) {
+  .events-panel-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .events-filters {
+    flex-direction: column;
+  }
+
+  .events-filters label,
+  .events-filters select {
+    width: 100%;
+  }
+}
+
+/* ===== END SYSTEM EVENTS AND ALARMS ===== */

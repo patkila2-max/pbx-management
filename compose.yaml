@@ -35,6 +35,27 @@ services:
         condition: service_healthy
     networks:
       - pbx_internal
+  events-worker:
+    build:
+      context: ./backend
+    command: ["python", "/app/events_worker.py"]
+    restart: unless-stopped
+    group_add:
+      - "986"
+    environment:
+      PGHOST: db
+      PGPORT: "5432"
+      PGDATABASE: pbx_management
+      PGUSER: pbx_event_writer
+      PGPASSWORD: ${PBX_EVENTS_DB_PASSWORD:?Set PBX_EVENTS_DB_PASSWORD in Dokploy}
+    volumes:
+      - /var/lib/pbx-events:/var/lib/pbx-events:rw
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - pbx_internal
+
   web:
     build:
       context: ./frontend

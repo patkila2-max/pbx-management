@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from asterisk_gateway import gateway_request, GatewayError
 from cdr_api import router as cdr_router
+from events_api import router as events_router
 
 app = FastAPI(
     title="PBX Management API",
@@ -107,3 +108,4 @@ def asterisk_call_quality():
 
 
 app.include_router(cdr_router)
+app.include_router(events_router)
