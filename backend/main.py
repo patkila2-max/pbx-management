@@ -100,4 +100,10 @@ def asterisk_endpoints():
 def asterisk_contacts():
     return get_asterisk_data("contacts")
 
+
+@app.get("/api/asterisk/call-quality")
+def asterisk_call_quality():
+    return get_asterisk_data("call_quality")
+
+
 app.include_router(cdr_router)

@@ -16,6 +16,7 @@ def gateway_request(operation: str) -> dict:
         "channels",
         "endpoints",
         "contacts",
+        "call_quality",
     }:
         raise GatewayError("Operation not permitted")
 
