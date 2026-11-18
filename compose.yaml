@@ -56,6 +56,32 @@ services:
     networks:
       - pbx_internal
 
+  cdr-worker:
+    build:
+      context: ./backend
+    command:
+      - sh
+      - -c
+      - |
+        while true; do
+          echo "Starting scheduled CDR import..."
+          python /app/cdr_importer.py
+          sleep 30
+        done
+    restart: unless-stopped
+    environment:
+      PGHOST: db
+      PGDATABASE: pbx_management
+      PGUSER: pbx_app
+      PGPASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the deployment environment}
+    volumes:
+      - /var/log/asterisk/cdr-csv:/var/lib/pbx-cdr:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - pbx_internal
+
   web:
     build:
       context: ./frontend
