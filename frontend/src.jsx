@@ -88,6 +88,12 @@ function CDRSection() {
 
   useEffect(() => {
     refreshCDR();
+
+    const refreshInterval = window.setInterval(() => {
+      refreshCDR();
+    }, 30000);
+
+    return () => window.clearInterval(refreshInterval);
   }, [refreshCDR]);
 
   function applyFilters(event) {
