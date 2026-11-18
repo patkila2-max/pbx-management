@@ -630,3 +630,138 @@ footer {
 }
 
 /* ===== END SYSTEM EVENTS AND ALARMS ===== */
+
+/* ===== RESPONSIVE DASHBOARD SPACING IMPROVEMENTS ===== */
+
+/* Consistent spacing and safe grid sizing */
+.grid,
+.cdr-summary,
+.events-summary,
+.quality-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr));
+  gap: 20px;
+  width: 100%;
+  align-items: stretch;
+}
+
+.cdr-summary,
+.events-summary {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 155px), 1fr));
+}
+
+.grid > *,
+.cdr-summary > *,
+.events-summary > *,
+.quality-summary > * {
+  min-width: 0;
+}
+
+/* Consistent metric card appearance */
+.card {
+  min-width: 0;
+  min-height: 112px;
+  height: 100%;
+  padding: 22px;
+  overflow-wrap: anywhere;
+}
+
+/* Consistent spacing between dashboard sections */
+.section {
+  margin: 34px 0;
+}
+
+.section-heading {
+  margin-bottom: 20px;
+}
+
+.panel,
+.banner {
+  min-width: 0;
+}
+
+/* CDR and event summary cards */
+.cdr-summary,
+.events-summary {
+  margin: 20px 0;
+}
+
+.cdr-import-panel {
+  gap: 22px;
+  padding: 22px;
+}
+
+/* Tablet layout */
+@media (min-width: 651px) and (max-width: 1000px) {
+  .shell {
+    padding: 32px 22px;
+  }
+
+  .grid,
+  .cdr-summary,
+  .events-summary,
+  .quality-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+  }
+}
+
+/* Mobile layout */
+@media (max-width: 650px) {
+  .shell {
+    padding: 24px 14px;
+  }
+
+  .grid,
+  .cdr-summary,
+  .events-summary,
+  .quality-summary,
+  .cdr-import-panel,
+  .cdr-detail-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+
+  .card {
+    min-height: 100px;
+    padding: 19px;
+  }
+
+  .section {
+    margin: 28px 0;
+  }
+
+  .section-heading {
+    margin-bottom: 16px;
+  }
+
+  .panel,
+  .banner {
+    padding: 18px;
+  }
+
+  .table-panel {
+    padding: 8px 12px 16px;
+  }
+
+  .cdr-summary,
+  .events-summary {
+    margin: 16px 0;
+  }
+
+  .cdr-import-panel {
+    padding: 18px;
+  }
+}
+
+/* Prevent flex and grid children from forcing page overflow */
+.topbar > *,
+.banner > *,
+.section-heading > *,
+.cdr-table-heading > *,
+.events-panel-heading > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* ===== END RESPONSIVE DASHBOARD SPACING IMPROVEMENTS ===== */
