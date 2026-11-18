@@ -366,12 +366,16 @@ function SystemEventsSection() {
   const [severity, setSeverity] = useState("");
   const [error, setError] = useState("");
   const [lastUpdated, setLastUpdated] = useState(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const refreshEvents = useCallback(async () => {
-    const params = new URLSearchParams({
-      page: "1",
-      page_size: "25",
-    });
+    setIsRefreshing(true);
+
+    try {
+      const params = new URLSearchParams({
+        page: "1",
+        page_size: "25",
+      });
 
     if (category) params.set("category", category);
     if (severity) params.set("severity", severity);
@@ -409,13 +413,17 @@ function SystemEventsSection() {
       failures.push("alarm history");
     }
 
-    setError(
-      failures.length
-        ? `Unable to load: ${failures.join(", ")}`
-        : ""
-    );
-
-    setLastUpdated(new Date());
+      if (failures.length) {
+        setError(`Unable to load: ${failures.join(", ")}`);
+      } else {
+        setError("");
+        setLastUpdated(new Date());
+      }
+    } catch (err) {
+      setError(`Refresh failed: ${err.message}`);
+    } finally {
+      setIsRefreshing(false);
+    }
   }, [category, severity]);
 
   useEffect(() => {
@@ -453,12 +461,20 @@ function SystemEventsSection() {
           </p>
         </div>
 
-        <button
-          className="secondary-button"
-          onClick={refreshEvents}
-        >
-          Refresh events
-        </button>
+        <div className="events-refresh-controls">
+          <button
+            type="button"
+            onClick={refreshEvents}
+            disabled={isRefreshing}
+          >
+            {isRefreshing ? "Refreshing…" : "Refresh events"}
+          </button>
+          <span className="muted" aria-live="polite">
+            {lastUpdated
+              ? `Last successful refresh: ${formatDate(lastUpdated)}`
+              : "Waiting for successful refresh"}
+          </span>
+        </div>
       </div>
 
       {error && <div className="notice">{error}</div>}
